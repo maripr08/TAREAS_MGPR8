@@ -1,0 +1,292 @@
+---
+title: "Tarea 3 datos"
+author: "Ponce Rodriguez Mariana Guadalupe"
+date: "Marzo del 2025"
+output:
+  html_document:
+    toc: true
+    toc_depth: 1
+    theme: cerulean
+---
+
+<style>
+body {
+text-align: justify}
+</style>
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(knitr)
+library(tidyverse)
+library(pracma)
+library(plotly)
+library(MASS)
+library(car)
+library(corrplot)
+library(rgl)
+library(scatterPlotMatrix)
+library(openxlsx)
+library(readxl)
+library(writexl)
+library(quantmod)
+library(qgraph)
+library(xts)
+library(zoo)
+library(dygraphs)
+knitr::knit_hooks$set(webgl = hook_webgl)
+```
+
+```{r}
+Empresas_data <- read_xlsx("T3_MP+precio_cierre_df.xlsx")
+```
+
+## Explicación de la elección de dichas empresas:
+
+Me interesa ver la relación entre el mercado de la energía y las industrias auxiliares de la construcción, metalúrgica, papelera, refinería y manufacturera, mismas que, en su mayoría, son las mayores consumidoras de energía .
+
+- Energía: ExxonMobil (XOM), Chevron (CVX), BP (BP), ConocoPhillips (COP).
+
+- Industria de la construcción: Caterpillar (CAT), Vulcan Materials (VMC).
+
+- Industria metalúrgica: Nucor (NUE), U.S. Steel (X).
+
+- Industria papelera: International Paper (IP)
+
+- Industria de la refinería: Valero Energy (VLO)
+
+- Industria manufacturera: General Electric (GE), 3M (MMM).
+
+## Comportamiento del precio cierre de las empresas analizadas
+
+```{r}
+
+begin_date = "2020-01-01"
+end_date = "2025-03-03"
+tickers <- c("XOM", "CVX", "BP", "COP", "CAT", "VMC", "NUE", "X", "IP", "GE", "MMM", "VLO")
+getSymbols(tickers, src = "yahoo", from = begin_date, to = end_date, periodicity = "daily")
+class(XOM)
+
+```
+
+```{r}
+lista <- lapply(tickers, function(x) Cl(get(x)))
+precio_cierre <- do.call(merge,lista)
+
+dygraph(precio_cierre)
+saveRDS(precio_cierre, "T3precio_cierre.RDS")
+# La siguiente función se utilizaría para leer el objeto precio_cierre.RDS
+#precio_cierre <- readRDS("precio_cierre.RDS")
+```
+
+## Análisis de correlación
+
+```{r}
+# Matriz de correlación
+cor_matrix <- cor(Empresas_data[,-1], use = "complete.obs")
+print("Matriz de correlación:")
+print(cor_matrix)
+```
+
+
+```{r}
+# Visualización
+corrplot(cor_matrix, 
+         method = "color",
+         type = "upper", 
+         tl.srt = 45,
+         tl.cex = 0.8,
+title = "Matriz de Correlaciones Significativas",
+         mar = c(0,0,1,0))
+```
+
+```{r}
+cor_matrix <- cor(Empresas_data[,-1], use = "complete.obs")
+qgraph(cor_matrix, 
+       layout = "spring", 
+       labels = colnames(cor_matrix),
+       title = "Matriz de Correlaciones Significativas")
+```
+
+##### Interpretación del gráfico qgraph (en general):
+
+En este gráfico, el grosor de las líneas refleja el grado de correlación entre las empresas: las líneas más gruesas indican una correlación más fuerte, mientras que las líneas más delgadas representan una correlación más débil. El color de las líneas nos permite distinguir el tipo de correlación: las líneas verdes indican una relación positiva, mientras que las rojas muestran una correlación negativa. Finalmente, la distancia entre los nodos nos ayuda a identificar las variables con relaciones más fuertes, ya que tienden a agruparse más cerca entre sí.
+
+
+
+##### Interpretación del gráfico qgraph para las empresas:
+
+Se observa una fuerte correlación positiva entre GE, VMC y CAT, así como entre VLO, XOM y COP, evidenciada por las líneas gruesas y la cercanía de sus nodos.
+
+En cambio, IP muestra una correlación muy débil con casi todas las empresas, excepto con 3M, posiblemente porque ambas comparten presencia en el mercado de artículos de oficina. Por su parte, 3M presenta una relación negativa con la mayoría, salvo con IP, lo cual refuerza esa conexión específica.
+
+
+## Análisis de Regresiones Lineales Simples
+
+##### XOM (ExxonMobil) -> VLO (Valero Energy)
+
+```{r}
+modelo_VLO_XOM <- lm(VLO.Close ~ XOM.Close, data = Empresas_data)
+summary(modelo_VLO_XOM)
+```
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+ggplot(Empresas_data, aes(x = XOM.Close, y = VLO.Close)) +
+  geom_point(color = "cyan4") +  # Puntos en color cyan
+  geom_smooth(method = "lm", col = "blue") +  # Línea de regresión en color azul
+  labs(title = "Regresión Lineal: XOM → VLO", 
+       x = "ExxonMobil (XOM)", 
+       y = "Valero Energy (VLO)") + 
+  theme(plot.title = element_text(hjust = 0.5))  # Centrar el título
+```
+
+
+La pendiente (1.19) y el p-value muy bajo muestran una fuerte relación entre XOM y VLO: por cada peso que sube XOM, VLO sube 1.20, en promedio.
+El R² de 0.933 indica que el 93.3% del cambio en VLO se explica por XOM, lo que refuerza esta fuerte relación. El modelo, en general, es muy significativo.
+
+En conclusión, ambas empresas están ligadas al sector energético. XOM produce petróleo y gas, y VLO lo refina. Por eso, cuando sube el precio del crudo, ambas tienden a subir también.
+
+
+##### CAT (Caterpillar) -> VMC (Vulcan Materials)
+
+```{r}
+modelo_VMC_CAT <- lm(VMC.Close ~ CAT.Close, data = Empresas_data)
+summary(modelo_VMC_CAT)
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+ggplot(Empresas_data, aes(x = CAT.Close, y = VMC.Close)) +
+  geom_point(color = "cyan4") +  # Puntos en color cyan
+  geom_smooth(method = "lm", col = "blue") +  # Línea de regresión en color azul
+  labs(title = "Regresión Lineal: CAT → VMC", 
+       x = "Caterpillar (CAT)", 
+       y = "Vulcan Materials (VMC)") + 
+  theme(plot.title = element_text(hjust = 0.5))  # Centrar el título
+```
+
+
+La pendiente (0.59) indica que si CAT sube 1 peso, VMC sube 0.59 pesos, en promedio.
+El R² = 0.9187 muestra una relación muy fuerte: el 91.87% del cambio en VMC se explica por CAT.
+
+En conclusión, ambas empresas están ligadas al sector construcción, así que si este crece, las dos se benefician. También se plantea una posible hipótesis: si los precios de los equipos CAT suben, VMC podría enfrentar mayores costos, pero esto dependerá de cuánto usa maquinaria de CAT.
+
+
+##### BP (BP) -> MMM (3M)
+
+```{r}
+modelo_MMM_BP <- lm(MMM.Close ~ BP.Close, data = Empresas_data)
+summary(modelo_MMM_BP)
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+ggplot(Empresas_data, aes(x = BP.Close, y = MMM.Close)) +
+  geom_point(color = "cyan4") +  # Puntos en color cyan
+  geom_smooth(method = "lm", col = "blue") +  # Línea de regresión en color azul
+  labs(title = "Regresión Lineal: CAT → VMC", 
+       x = "BP (BP)", 
+       y = "3M (MMM)") + 
+  theme(plot.title = element_text(hjust = 0.5))  # Centrar el título
+```
+
+La pendiente de -3.08 indica que por cada aumento de 1 peso en el precio de BP, el precio de MMM baja 3.08 pesos, mostrando una relación negativa entre ambas empresas.
+El R² = 0.4537 significa que solo el 45.37% de la variabilidad en MMM se explica por BP, lo que sugiere una relación moderada y la influencia de otros factores.
+
+En conclusión, cuando BP sube, MMM tiende a bajar. Esto podría deberse a que el aumento en los precios del petróleo afecta a 3M como consumidor de productos derivados del crudo.
+
+
+
+
+
+## Análisis de Regresiones Lineales Múltiples
+
+Nota: Realizo un análisis de Factor de Inflación de la Varianza (VIF)  para detectar multicolinealidad entre las variables analizadas. 
+
+El VIF (Variance Inflation Factor) mide cuánto aumenta la varianza de un coeficiente debido a la multicolinealidad.
+
+Interpretación del VIF:
+
+VIF < 5 → No hay multicolinealidad grave.
+
+VIF entre 5 y 10 → Hay multicolinealidad moderada.
+
+VIF > 10 → Multicolinealidad severa (considera eliminar variables o combinarlas).
+
+
+
+##### (XOM.Close, CVX.Close) ->  VLO.Close
+```{r}
+modelo_VLO <- lm(VLO.Close ~ XOM.Close + CVX.Close, data = Empresas_data)
+summary(modelo_VLO)  
+```
+
+```{r}
+# Representación 3D con scatter3d()
+scatter3d(VLO.Close ~ XOM.Close + CVX.Close, data = Empresas_data, 
+          fit = "linear", residuals = TRUE, bg = "white", axis.scales = TRUE, 
+          grid = TRUE, ellipsoid = FALSE)
+```
+
+```{r}
+#Cálculo del VIF
+vif(modelo_VLO)
+```
+
+CAT y VMC tienen un efecto positivo en GE, pero CAT influye mucho más. El modelo explica bien el comportamiento de GE (86.73%), aunque hay mucha relación entre las variables. Esto tiene sentido porque si hay más construcción, le va mejor a CAT (maquinaria) y eso también impulsa a GE (equipos industriales). VMC también aporta, ya que más obras significan más demanda para ambas empresas.
+
+
+
+##### (CAT.Close, VMC.Close) ->  GE.Close
+```{r}
+modelo_GE <- lm(GE.Close ~ CAT.Close + VMC.Close, data = Empresas_data)
+summary(modelo_GE)  
+```
+
+```{r}
+# Representación 3D con scatter3d()
+scatter3d(GE.Close ~ CAT.Close + VMC.Close, data = Empresas_data, 
+          fit = "linear", residuals = TRUE, bg = "white", axis.scales = TRUE, 
+          grid = TRUE, ellipsoid = FALSE)
+```
+
+```{r}
+#Cálculo del VIF
+vif(modelo_GE)
+```
+
+La pendiente de CAT (0.5083) indica que si CAT sube 1 peso, GE sube 0.5083 pesos. En el caso de VMC (0.1265), si sube 1 peso, GE sube 0.1265 pesos. Es decir, ambas influyen positivamente en GE, pero CAT tiene un impacto mucho mayor.
+
+El R² = 0.8673 muestra que el 86.73% del cambio en GE se explica por CAT y VMC.
+El VIF alto se debe a que las variables están muy relacionadas entre sí.
+
+CAT y GE están ligadas porque ambas trabajan en sectores industriales. Si a CAT le va bien, es señal de que hay mucha actividad en construcción e infraestructura, lo que también puede ayudar a GE.
+
+Con VMC pasa algo similar. Si VMC crece, quiere decir que hay más obras, lo cual beneficia a CAT (por la maquinaria) y también a GE (por sus equipos eléctricos e industriales).
+
+En resumen, tanto CAT como VMC ayudan a que GE crezca. El modelo lo explica bien, aunque hay que tener cuidado porque las variables se parecen mucho entre sí.
+
+
+
+##### (IP.Close, BP.Close) ->  MMM.Close
+```{r}
+modelo_MMM <- lm(MMM.Close ~ IP.Close + BP.Close, data = Empresas_data)
+summary(modelo_MMM)  
+```
+
+```{r}
+# Representación 3D con scatter3d()
+scatter3d(MMM.Close ~ IP.Close + BP.Close, data = Empresas_data, 
+          fit = "linear", residuals = TRUE, bg = "white", axis.scales = TRUE, 
+          grid = TRUE, ellipsoid = FALSE)
+```
+
+```{r}
+#Cálculo del VIF
+vif(modelo_MMM)
+```
+
+
+
+
+
